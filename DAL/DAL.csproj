@@ -56,6 +56,7 @@
     <Compile Include="Form1.Designer.cs">
       <DependentUpon>Form1.cs</DependentUpon>
     </Compile>
+    <Compile Include="InboundDAL.cs" />
     <Compile Include="MedicineDAL.cs" />
     <Compile Include="PatientDAL.cs" />
     <Compile Include="PrescriptionDAL.cs" />

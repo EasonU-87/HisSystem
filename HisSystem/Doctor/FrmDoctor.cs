@@ -15,11 +15,7 @@ namespace HisSystem.Doctor
 {
     public partial class FrmDoctor : Form
     {
-        // ==========================================
-        // 1. 定义全局变量 (放在方法外面！)
-        // ==========================================
 
-        // 业务逻辑层工具
         private PatientBLL patientBLL = new PatientBLL();
         private MedicineBLL medicineBLL = new MedicineBLL();
         private PrescriptionBLL presBLL = new PrescriptionBLL();
@@ -48,14 +44,14 @@ namespace HisSystem.Doctor
 
 
 
-            // 👇 加载右侧药品下拉框
+            //  加载右侧药品下拉框
             try
             {
                 List<Medicine> meds = medicineBLL.GetAllMedicines();
                 cboMedicines.DataSource = meds;
-                cboMedicines.DisplayMember = "MedicineName"; // 显示药名
-                cboMedicines.ValueMember = "MedicineID";     // 存ID
-                cboMedicines.SelectedIndex = -1;             // 默认不选中
+                cboMedicines.DisplayMember = "MedicineName"; 
+                cboMedicines.ValueMember = "MedicineID";     
+                cboMedicines.SelectedIndex = -1;            
             }
             catch (Exception ex)
             {
@@ -86,8 +82,8 @@ namespace HisSystem.Doctor
                 lblPatientInfo.Text = $"当前就诊：{currentPatient.PatientName} | {currentPatient.Gender} | {currentPatient.Age}岁";
                 lblPatientInfo.ForeColor = System.Drawing.Color.Blue;
 
-                // 换了人，购物车要清空吗？通常是清空的，或者保留作为草稿。
-                // 这里我们简单处理：换人就清空购物车
+
+                // 简单处理：换人就清空购物车
                 cartList.Clear();
                 RefreshCartGrid();
             }
@@ -138,12 +134,9 @@ namespace HisSystem.Doctor
         }
         private void RefreshCartGrid()
         {
-            // 注意：因为用了 BindingList，这里不再需要写 DataSource = null 了！
-            // 只要你在这个窗体的 Load 事件里写过一次 dgvPrescription.DataSource = cartList;
-            // 以后只要 cartList 发生增删，表格自动刷新！
-            // ========================================================
 
-            // 1. 只需要重新计算总金额
+
+            // 1. 重新计算总金额
             decimal total = 0;
             foreach (var item in cartList)
             {
@@ -151,7 +144,7 @@ namespace HisSystem.Doctor
             }
             lblTotalMoney.Text = $"总金额：{total} 元";
 
-            // 2. 隐藏不需要的列 (如果你之前在设计器里隐藏了，这段甚至也可以不要)
+            // 2. 隐藏不需要的列 
             string[] hideCols = { "DetailID", "PrescriptionID", "MedicineID" };
             foreach (var col in hideCols)
             {
@@ -186,21 +179,20 @@ namespace HisSystem.Doctor
 
                 if (safeResult.IsBlocked == true)
                 {
-                    // 🚨 命中了【禁止】级别：弹出带红叉的警告！
-                    MessageBox.Show(allWarnings, "🚨 严重用药安全警告", MessageBoxButtons.OK, MessageBoxIcon.Stop);
+                    // 命中了【禁止】级别：弹出带红叉的警告！
+                    MessageBox.Show(allWarnings, " 严重用药安全警告", MessageBoxButtons.OK, MessageBoxIcon.Stop);
 
-                    // ⛔ 核心防线：这里必须有 return！它会直接终止程序往下走，绝对不存数据库！
                     return;
                 }
                 else
                 {
-                    // ⚠️ 命中了【慎用/一般】级别：给个黄色的警告，让医生自己选
+                    //  命中了【慎用/一般】级别：给个黄色的警告，让医生自己选
                     DialogResult dr = MessageBox.Show(allWarnings + "\n\n是否确认无视风险，强行提交此处方？",
-                        "⚠️ 用药风险提示", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                        " 用药风险提示", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
 
                     if (dr == DialogResult.No)
                     {
-                        // ⛔ 医生点了“否”，怂了，放弃提交
+                        //  医生点了“否”，放弃提交
                         return;
                     }
                     // 如果医生点了“是”，没有 return，代码就会乖乖往下走，去存数据库！
@@ -208,14 +200,14 @@ namespace HisSystem.Doctor
             }
 
 
-            // 3. 准备主表数据 (把数据装进我们刚刚写好的 Model 盒子里)
+            // 3. 准备主表数据 
             PrescriptionMain main = new PrescriptionMain();
 
             // 从当前选中的病人身上取数据
             main.PatientID = currentPatient.PatientID;
             main.PatientName = currentPatient.PatientName;
-            main.PatientGender = currentPatient.Gender; // 假设你的 Patient 实体里叫 Gender
-            main.PatientAge = currentPatient.Age;       // 假设你的 Patient 实体里叫 Age
+            main.PatientGender = currentPatient.Gender; // 
+            main.PatientAge = currentPatient.Age;       // 
 
             // 从登录 Session 取医生数据
             main.DoctorID = AppSession.CurrentUser.UserID;
@@ -232,7 +224,6 @@ namespace HisSystem.Doctor
             }
             main.TotalAmount = total;
 
-            // 4. 调用 BLL 发送去数据库
             try
             {
                 // 把 BindingList 转回 List 传给底层
@@ -258,29 +249,25 @@ namespace HisSystem.Doctor
         private void dgvPrescription_CellContentClick(object sender, DataGridViewCellEventArgs e)
         {
 
-            // 如果 e.RowIndex 是 -1 (说明点的是表头/标题)，直接返回，别往下跑！
+            // 如果 e.RowIndex 是 -1 (说明点的是表头/标题)，直接返回
             // ==========================================================
             if (e.RowIndex < 0) return;
 
 
-            // --- 下面是正常的删除逻辑 ---
 
-            // 1. 获取选中的这行数据
-            // 这里的 dgvPrescription.Rows[e.RowIndex] 之所以报错，就是因为 e.RowIndex 可能是 -1
-            // 现在有了上面的 if，走到这一步时 e.RowIndex 肯定 >= 0，所以绝对不会报错了
+
             var selectedDetail = dgvPrescription.Rows[e.RowIndex].DataBoundItem as PrescriptionDetail;
 
-            // 2. 弹窗询问是否删除
+            //  弹窗询问是否删除
             if (selectedDetail != null)
             {
                 string msg = $"确定移除【{selectedDetail.MedicineName}】吗？";
-                // 使用 MessageBox 让你看清楚触发了事件
                 if (MessageBox.Show(msg, "删除确认", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
                 {
-                    // 3. 从购物车(cartList)删除
+                    //  从购物车(cartList)删除
                     cartList.Remove(selectedDetail);
 
-                    // 4. 刷新表格
+                    //  刷新表格
                     RefreshCartGrid();
                 }
             }
@@ -288,9 +275,7 @@ namespace HisSystem.Doctor
 
         private void dgvPrescription_DataBindingComplete(object sender, DataGridViewBindingCompleteEventArgs e)
         {
-            // 每当数据源改变（DataSource = ...）之后，系统都会触发这个事件。
-            // 我们在这里强制把每一列都设为“不可排序”。
-            // 这样，CurrencyManager 就再也不会试图去排序那个不支持排序的 List 了！
+
             foreach (DataGridViewColumn col in dgvPrescription.Columns)
             {
                 col.SortMode = DataGridViewColumnSortMode.NotSortable;

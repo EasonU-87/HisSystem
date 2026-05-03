@@ -12,20 +12,18 @@ namespace BLL
     public class PrescriptionBLL
     {
         private PrescriptionDAL dal = new PrescriptionDAL();
-        // =================================================================================
-        // 💥 新增核心引擎：用药安全智能审方大脑
-        // =================================================================================
+
         public RuleCheckResult CheckSafety(List<PrescriptionDetail> cartList)
         {
             RuleCheckResult result = new RuleCheckResult();
 
-            // 1. 防呆设计：如果购物车里只有1个药或者干脆没药，绝不可能有组合冲突，直接放行！
+            // 如果购物车里只有1个药或者没药，绝不可能有组合冲突
             if (cartList == null || cartList.Count < 2)
             {
                 return result;
             }
 
-            // 2. 提取药品 ID：把购物车里所有的 MedicineID 抽出来，拼成 "1,2,5" 这样的字符串
+            // 提取药品 ID：把购物车里所有的 MedicineID 抽出来，拼成 "1,2,5" 这样的字符串
             List<int> medIds = new List<int>();
             foreach (var item in cartList)
             {
@@ -33,10 +31,10 @@ namespace BLL
             }
             string idString = string.Join(",", medIds);
 
-            // 3. 派 DAL 去数据库查：有没有命中什么法律条文？
+           
             DataTable dtRules = dal.GetIncompatibilityRules(idString);
 
-            // 4. 大脑开始审判！
+            
             if (dtRules != null && dtRules.Rows.Count > 0)
             {
                 foreach (DataRow row in dtRules.Rows)
@@ -45,10 +43,10 @@ namespace BLL
                     string riskLevel = row["RiskLevel"].ToString();
                     string msg = row["Description"].ToString();
 
-                    // 把信息包装得专业一点，存进结果盒子里
+                 
                     result.Messages.Add($"[{riskLevel}] {msg}");
 
-                    // 💥 最关键的审判逻辑：如果风险等级包含“禁止”两个字，立刻触发强制阻断开关！
+                    // 审判逻辑：如果风险等级包含“禁止”两个字，立刻触发强制阻断开关
                     if (riskLevel.Contains("禁止"))
                     {
                         result.IsBlocked = true;
@@ -56,13 +54,12 @@ namespace BLL
                 }
             }
 
-            // 把判决书交出去
             return result;
         }
 
         public bool SavePrescription(PrescriptionMain main, List<PrescriptionDetail> details)
         {
-            // 防呆校验：如果不小心传了空数据，直接拦住
+            // 如果不小心传了空数据，直接拦住
             if (details == null || details.Count == 0) return false;
 
             return dal.InsertPrescription(main, details);
@@ -70,62 +67,54 @@ namespace BLL
 
         public List<PrescriptionDetailDto> GetUnpaidPrescriptions(string searchId)
         {
-            // 🛡️ BLL 第一道防线：参数校验
+          
             if (string.IsNullOrEmpty(searchId))
             {
                 throw new Exception("业务拦截：查询单号不能为空，请重新输入！");
             }
 
-            // 规则通过，呼叫 DAL 层去底层真正的数据库里拿数据
+          
             return dal.GetUnpaidPrescriptions(searchId);
         }
 
-        /// <summary>
         /// 核心业务逻辑：收费并扣减库存
-        /// </summary>
-        /// <param name="searchId">患者卡号或处方号</param>
-        /// <param name="medicineList">要收费的药品明细列表</param>
-        /// <returns>是否收费成功</returns>
-        public bool PayAndCheckout(string searchId, List<PrescriptionDetailDto> medicineList)
+        public bool PayAndCheckout(string searchId)
         {
-            // ==========================================
-            // 🛡️ 第一道防线：参数基础校验
-            // ==========================================
+
             if (string.IsNullOrEmpty(searchId))
             {
                 // 直接抛出异常，UI 层收到后会弹窗提示给收费员
                 throw new Exception("业务拦截：缴费单号不能为空，请重新输入！");
             }
 
-            if (medicineList == null || medicineList.Count == 0)
-            {
-                throw new Exception("业务拦截：处方明细为空，该单号没有需要缴费的药品！");
-            }
-
-            // ==========================================
-            // 🛡️ 第二道防线：深入业务规则校验（可选，显专业）
-            // ==========================================
-            foreach (var item in medicineList)
-            {
-                if (item.Quantity <= 0)
-                {
-                    throw new Exception($"业务拦截：药品【{item.MedicineName}】的数量异常（不能小于等于0）！");
-                }
-                if (item.UnitPrice < 0)
-                {
-                    throw new Exception($"业务拦截：药品【{item.MedicineName}】的单价异常（不能为负数）！");
-                }
-            }
-
-            // ==========================================
-            // 🚀 防线全部通过，放行！交由 DAL 层执行底层生死事务！
-            // ==========================================
-            // 这里的 ConfirmPaymentTransaction 就是你在 DAL 层写的那个带有 SqlTransaction 事务的方法
-            return dal.ConfirmPaymentTransaction(searchId, medicineList);
+            return dal.ConfirmPaymentTransaction(searchId);
         }
 
+        /// 药师站专用：获取所有已缴费、待发药的处方列表 (Status = 1)
+        public DataTable GetPaidList()
+        {
+            return dal.GetPaidList();
+        }
 
+        /// 逻辑：调用 DAL 层的 FEFO 算法，跨表扣减批次库存、总库存并记录流水
+        /// </summary>
+        /// <param name="prescriptionID">处方主键ID</param>
+        /// <param name="operatorID">当前操作的药师ID</param>
+        public bool DispenseWithFEFO(int prescriptionID, int operatorID)
+        {
+            // 1. 业务校验
+            if (prescriptionID <= 0)
+            {
+                throw new Exception("业务拦截：处方 ID 异常，无法发药！");
+            }
+            if (operatorID <= 0)
+            {
+                throw new Exception("业务拦截：操作人信息丢失，请重新登录！");
+            }
 
+            // 2. 执行 DAL 层复杂的事务发药逻辑
+            return dal.DispenseWithFEFO(prescriptionID, operatorID);
+        }
 
     }
 }

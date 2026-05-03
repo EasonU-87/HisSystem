@@ -41,13 +41,11 @@ namespace HisSystem
                 return;
             }
 
-            // 2. 调用 BLL 层（BLL 会去调 DAL，DAL 去连数据库）
+
             UserBLL bll = new UserBLL();
 
-            // --- 关键时刻：这里程序会尝试连接数据库 ---
             User user = bll.Login(name, pwd);
 
-            // 3. 判断提取结果
             if (user != null)
             {
                 // 1. 登录成功！把人存进全局变量
@@ -60,7 +58,7 @@ namespace HisSystem
                 switch (user.RoleType)
                 {
                     case "医生":
-                        mainForm = new FrmDoctor(); // 还没建这个窗体的话会报错，去建一个
+                        mainForm = new FrmDoctor(); 
                         break;
                     case "药师":
                         mainForm = new FrmPharmacist();
@@ -78,9 +76,9 @@ namespace HisSystem
 
                 if (mainForm != null)
                 {
-                    this.Hide();            // 隐藏登录窗
-                    mainForm.ShowDialog();  // 打开主窗体 (代码会停在这里，直到主窗体关闭)
-                    this.Show();            // 主窗体关掉后，重新显示登录窗 (可选)
+                    this.Hide();            
+                    mainForm.ShowDialog();  
+                    this.Show();            
                 }
             }
             else

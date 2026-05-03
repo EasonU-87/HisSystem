@@ -43,3 +43,4 @@ D:\C++-code\HisSystem_Final\HisSystem\obj\Debug\HisSystem.csproj.Up2Date
 D:\C++-code\HisSystem_Final\HisSystem\obj\Debug\HisSystem.exe
 D:\C++-code\HisSystem_Final\HisSystem\obj\Debug\HisSystem.pdb
 D:\C++-code\HisSystem_Final\HisSystem\obj\Debug\HisSystem.Cashier.FrmCashier.resources
+D:\C++-code\HisSystem_Final\HisSystem\obj\Debug\HisSystem.Pharmacist.FrmPharmacist.resources

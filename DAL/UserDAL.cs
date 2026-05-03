@@ -21,7 +21,6 @@ namespace DAL
                 new SqlParameter("@p", password)
             };
 
-            // 调用你的 SqlHelper (确保 SqlHelper 也在 DAL 项目里)
             DataTable dt = SqlHelper.ExecuteDataTable(sql, paras);
 
             if (dt.Rows.Count > 0)

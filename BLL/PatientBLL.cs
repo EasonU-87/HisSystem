@@ -10,8 +10,7 @@ namespace BLL
 {
     public class PatientBLL
     {
-        private PatientDAL dal = new PatientDAL();
-        private PatientDAL dal_a = new PatientDAL(); 
+        private PatientDAL dal = new PatientDAL(); 
 
         public List<Patient> GetPatientList()
         {

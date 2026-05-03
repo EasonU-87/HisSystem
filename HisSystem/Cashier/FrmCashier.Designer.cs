@@ -203,7 +203,7 @@
             this.Controls.Add(this.panel2);
             this.Controls.Add(this.panel1);
             this.Name = "FrmCashier";
-            this.Text = "FrmCashier";
+            this.Text = "收费工作站";
             this.panel1.ResumeLayout(false);
             this.panel1.PerformLayout();
             this.panel2.ResumeLayout(false);

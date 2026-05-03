@@ -25,13 +25,11 @@ namespace DAL
             {
                 list.Add(new Patient()
                 {
-                    // 必须和数据库列名完全一致
                     PatientID = Convert.ToInt32(row["PatientID"]),
                     PatientName = row["PatientName"].ToString(),
                     Gender = row["Gender"].ToString(),
                     Age = Convert.ToInt32(row["Age"]),
 
-                    // 处理可能为空的字段 (DBNull)
                     CardID = row["CardID"] != DBNull.Value ? row["CardID"].ToString() : "",
                     Phone = row["Phone"] != DBNull.Value ? row["Phone"].ToString() : "",
 

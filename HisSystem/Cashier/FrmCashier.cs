@@ -14,19 +14,17 @@ namespace HisSystem.Cashier
 {
     public partial class FrmCashier : Form
     {
-        // 🔥 核心血管：声明一个绑定列表！以后我们只管操作这个列表，界面表格会自动跟着变！
+
         private BindingList<PrescriptionDetailDto> prescriptionList;
         private PrescriptionBLL presBLL = new PrescriptionBLL();
         public FrmCashier()
         {
             InitializeComponent();
-            // 1. 初始化这个空列表
+
             prescriptionList = new BindingList<PrescriptionDetailDto>();
 
-            // 2. 告诉表格：千万别自己瞎生成列，用我之前在设计器里配好的列！
             dgvPrescription.AutoGenerateColumns = false;
 
-            // 3. 将血管插进表格：把数据源绑定为我们的列表
             dgvPrescription.DataSource = prescriptionList;
         }
 
@@ -40,7 +38,7 @@ namespace HisSystem.Cashier
             }
             try
             {
-                // 1. 呼叫业务逻辑层工具查数据
+                // 1. 查数据
                 List<PrescriptionDetailDto> dataFromDb = presBLL.GetUnpaidPrescriptions(searchId);
 
                 // 2. 清空旧数据，把新查到的数据倒进界面绑定的列表里
@@ -73,20 +71,18 @@ namespace HisSystem.Cashier
         {
             string searchId = txtSearchID.Text.Trim();
 
-            // 将界面上绑定的数据转换成标准 List，交给 BLL 处理
-            List<PrescriptionDetailDto> payList = new List<PrescriptionDetailDto>(prescriptionList);
+            
 
             try
             {
-                // 发起底层生死事务！(UI 彻底当甩手掌柜)
-                bool isSuccess = presBLL.PayAndCheckout(searchId, payList);
+                bool isSuccess = presBLL.PayAndCheckout(searchId);
 
                 if (isSuccess)
                 {
-                    // 胜利收尾
-                    MessageBox.Show(" 收费成功！处方状态已更新，药房库存已扣减！", "交易完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show(" 收费成功！\n处方已转入“待发药”状态，请指引患者前往药房窗口取药。",
+                            "交易完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
 
-                    // 清空界面，准备迎接下一位患者
+                    // 清空界面
                     prescriptionList.Clear();
                     txtSearchID.Clear();
                     CalculateTotalMoney();
@@ -102,18 +98,17 @@ namespace HisSystem.Cashier
 
 
 
-        // 🧮 算账专用方法：遍历列表，把小计加起来
+        //算账专用方法：遍历列表，把小计加起来
         private void CalculateTotalMoney()
         {
             decimal total = 0;
 
-            // 注意：我们是遍历数据列表 _prescriptionList，而不是去遍历界面的 DGV 行，这才是真正的解耦！
+            // 注意：我们是遍历数据列表 prescriptionList，
             foreach (var item in prescriptionList)
             {
                 total += item.SubTotal;
             }
 
-            // 更新右下角的超大红色字体 Label
             lblTotalMoney.Text = $"待收总金额：{total:F2} 元";
         }
     }

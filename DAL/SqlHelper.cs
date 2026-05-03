@@ -1,7 +1,7 @@
 ﻿using System;
-using System.Configuration; // 必须引用 System.Configuration
+using System.Configuration; // 
 using System.Data;
-using System.Data.SqlClient; // 必须引用 System.Data
+using System.Data.SqlClient; // 
 
 namespace DAL
 {
@@ -73,6 +73,18 @@ namespace DAL
                     return cmd.ExecuteScalar();
                 }
             }
+        }
+        // 在 SqlHelper 类中添加这个新方法，支持事务
+        public static int ExecuteNonQuery(SqlTransaction trans, string sql, params SqlParameter[] parameters)
+        {
+            // 注意：这里不能用 using(conn)，因为事务依赖于外部传入的长连接
+            SqlCommand cmd = new SqlCommand(sql, trans.Connection, trans);
+            if (parameters != null)
+            {
+                cmd.Parameters.AddRange(parameters);
+            }
+            // 事务环境下，连接已经是 Open 状态，直接执行
+            return cmd.ExecuteNonQuery();
         }
     }
 }

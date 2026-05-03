@@ -12,13 +12,13 @@ namespace DAL
 {
     public class PrescriptionDAL
     {
-        // 从 App.config 读取你的数据库连接字符串 (请确认名字叫 strCon 或你自己的名字)
+
         private string connStr = ConfigurationManager.ConnectionStrings["strConn"].ConnectionString;
         public DataTable GetIncompatibilityRules(string idString)
         {
             DataTable dtRules = new DataTable();
 
-            // 只要规则表里的 药品A 和 药品B 【同时】出现在我们开的这堆药(idString)里，就被抓住了！
+
             string sql = $@"SELECT * FROM T_Rule_Incompatibility 
                            WHERE MedicineID_A IN ({idString}) 
                            AND MedicineID_B IN ({idString})";
@@ -48,18 +48,16 @@ namespace DAL
                                      (PrescriptionNo, PatientID, PatientName, PatientGender, PatientAge, DoctorID, DoctorName, TotalAmount, Status, CreateTime) 
                                      VALUES 
                                      (@PrescriptionNo, @PatientID, @PatientName, @PatientGender, @PatientAge, @DoctorID, @DoctorName, @TotalAmount, @Status, GETDATE());
-                                     SELECT @@IDENTITY;"; // 获取刚生成的 PrescriptionID 主键
+                                     SELECT @@IDENTITY;"; 
 
                     SqlCommand cmdMain = new SqlCommand(sqlMain, conn, trans);
 
-                    // 生成处方编号 (PRE + 年月日时分秒)
                     string presNo = "PRE" + DateTime.Now.ToString("yyyyMMddHHmmss");
                     cmdMain.Parameters.AddWithValue("@PrescriptionNo", presNo);
 
                     cmdMain.Parameters.AddWithValue("@PatientID", main.PatientID);
                     cmdMain.Parameters.AddWithValue("@PatientName", main.PatientName);
 
-                    // 处理允许为空的字段 (如果没填，要转成 DBNull.Value 存进数据库)
                     cmdMain.Parameters.AddWithValue("@PatientGender", string.IsNullOrEmpty(main.PatientGender) ? (object)DBNull.Value : main.PatientGender);
                     cmdMain.Parameters.AddWithValue("@PatientAge", main.PatientAge.HasValue ? (object)main.PatientAge.Value : DBNull.Value);
 
@@ -71,9 +69,7 @@ namespace DAL
                     // 执行主表插入，并拿到新生成的 ID
                     int newPresID = Convert.ToInt32(cmdMain.ExecuteScalar());
 
-                    // ==========================================
-                    // 2. 循环插入明细表 (T_Prescription_Detail)
-                    // ==========================================
+
                     foreach (var item in details)
                     {
                         string sqlDetail = @"INSERT INTO T_Prescription_Detail 
@@ -95,13 +91,13 @@ namespace DAL
                         cmdDetail.ExecuteNonQuery();
                     }
 
-                    // 全部没报错，提交事务！
+
                     trans.Commit();
                     return true;
                 }
                 catch (Exception ex)
                 {
-                    // 报错了，全部回滚撤销！
+
                     trans.Rollback();
                     throw new Exception("数据库保存失败：" + ex.Message);
                 }
@@ -111,7 +107,6 @@ namespace DAL
         {
             List<PrescriptionDetailDto> list = new List<PrescriptionDetailDto>();
 
-            // 架构师级 SQL：多表联查
             string sql = @"
         SELECT 
             d.MedicineName, 
@@ -137,7 +132,7 @@ namespace DAL
                         if (!reader.HasRows)
                         {
                             // 如果进到这里，说明 SQL 语法没错，但数据库里确实没搜到符合条件的记录
-                            Console.WriteLine("⚠️ 警告：数据库返回 0 行结果。请检查 Status 是否为 0 或单号是否存在。");
+                            Console.WriteLine(" 警告：数据库返回 0 行结果。请检查 Status 是否为 0 或单号是否存在。");
                         }
                         while (reader.Read())
                         {
@@ -157,66 +152,111 @@ namespace DAL
         }
 
 
-        public bool ConfirmPaymentTransaction(string searchId, List<PrescriptionDetailDto> medicineList)
+        public bool ConfirmPaymentTransaction(string searchId)
         {
-            using (SqlConnection conn = new SqlConnection(connStr))
+            // 定义 SQL：只改状态，Status 从 0 变 1
+            string sql = "UPDATE T_Prescription_Main SET Status = 1 WHERE (PrescriptionNo = @id OR CAST(PatientID AS VARCHAR) = @id) AND Status = 0";
+
+            SqlParameter[] paras = {
+        new SqlParameter("@id", searchId)
+    };
+
+            // 使用你新改的 SqlHelper (非事务版即可，因为只有一条 SQL)
+            // 注意：根据你的 SqlHelper 定义，如果是单条语句，不需要手动开事务
+            int rows = SqlHelper.ExecuteNonQuery(sql, paras);
+
+            if (rows == 0)
+            {
+                throw new Exception("未能找到待缴费处方，可能已缴费或单号错误！");
+            }
+            return true;
+        }
+
+        public bool DispenseWithFEFO(int prescriptionID, int operatorID)
+        {
+            using (SqlConnection conn = new SqlConnection(ConfigurationManager.ConnectionStrings["strConn"].ConnectionString))
             {
                 conn.Open();
-                // 🌟 开启数据库事务！神圣的原子操作开始！
                 using (SqlTransaction trans = conn.BeginTransaction())
                 {
                     try
                     {
-                        // 第一拳：修改处方主表的状态（0 变 1）
-                        string updateStatusSql = "UPDATE T_Prescription_Main SET Status = 1 WHERE (PrescriptionNo = @id OR CAST(PatientID AS VARCHAR) = @id) AND Status = 0";
-                        using (SqlCommand cmdStatus = new SqlCommand(updateStatusSql, conn, trans)) // 注意：必须把 trans 传给 cmd
+                        // 1. 获取明细（这里可以用原生的，因为需要读数据）
+                        string sqlDetails = "SELECT MedicineID, Quantity FROM T_Prescription_Detail WHERE PrescriptionID = @pid";
+                        DataTable dtDetails = new DataTable();
+                        using (SqlCommand cmd = new SqlCommand(sqlDetails, conn, trans))
                         {
-                            cmdStatus.Parameters.AddWithValue("@id", searchId);
-                            int rows = cmdStatus.ExecuteNonQuery();
-                            if (rows == 0)
-                            {
-                                throw new Exception("未能找到需要缴费的处方，可能已缴费或单号错误！");
-                            }
+                            cmd.Parameters.AddWithValue("@pid", prescriptionID);
+                            using (SqlDataAdapter adapter = new SqlDataAdapter(cmd)) { adapter.Fill(dtDetails); }
                         }
 
-                        // 第二拳：循环扣减药房库存
-                        // 🔥 架构师精准修正：表名改为 Medicine，库存字段改为 Stock
-                        string updateStockSql = "UPDATE T_Medicine SET Stock = Stock - @qty WHERE MedicineName = @medName";
-
-                        foreach (var item in medicineList)
+                        foreach (DataRow row in dtDetails.Rows)
                         {
-                            using (SqlCommand cmdStock = new SqlCommand(updateStockSql, conn, trans))
-                            {
-                                cmdStock.Parameters.AddWithValue("@qty", item.Quantity);
-                                cmdStock.Parameters.AddWithValue("@medName", item.MedicineName);
+                            int medId = Convert.ToInt32(row["MedicineID"]);
+                            int requiredQty = Convert.ToInt32(row["Quantity"]);
 
-                                int stockRows = cmdStock.ExecuteNonQuery();
-                                if (stockRows == 0)
-                                {
-                                    // 如果某个药找不到，直接抛出异常，触发整体回滚！
-                                    throw new Exception($"药品【{item.MedicineName}】扣减库存失败，药房可能无此药！");
-                                }
+                            // 2. 查批次
+                            string sqlBatches = "SELECT BatchID, BatchStock FROM T_Medicine_Batch WHERE MedicineID = @mid AND BatchStock > 0 ORDER BY ExpiryDate ASC";
+                            DataTable dtBatches = new DataTable();
+                            using (SqlCommand cmd = new SqlCommand(sqlBatches, conn, trans))
+                            {
+                                cmd.Parameters.AddWithValue("@mid", medId);
+                                using (SqlDataAdapter adapter = new SqlDataAdapter(cmd)) { adapter.Fill(dtBatches); }
                             }
+
+                            foreach (DataRow batch in dtBatches.Rows)
+                            {
+                                if (requiredQty <= 0) break;
+                                int bId = Convert.ToInt32(batch["BatchID"]);
+                                int bStock = Convert.ToInt32(batch["BatchStock"]);
+                                int take = Math.Min(bStock, requiredQty);
+                                int afterStock = bStock - take;
+                                // 3. 使用【升级版 SqlHelper】执行事务操作
+                                // 扣批次
+                                SqlHelper.ExecuteNonQuery(trans,"UPDATE T_Medicine_Batch SET BatchStock = @after WHERE BatchID = @bid",
+                                    new SqlParameter("@after", afterStock),
+                                    new SqlParameter("@bid", bId));
+
+                                // 记流水
+                                SqlHelper.ExecuteNonQuery(trans,"INSERT INTO T_Stock_Log (MedicineID, BatchID, ChangeQty, " +
+                                    "AfterStock, OpType, OperatorID, PrescriptionID) " +"VALUES (@mid, @bid, @q, @after, '发药', @oid, @pid)",
+                                    new SqlParameter("@mid", medId),
+                                    new SqlParameter("@bid", bId),
+                                    new SqlParameter("@q", -take),
+                                    new SqlParameter("@after", afterStock), // 👈 这里把算好的结存库存传给数据库
+                                    new SqlParameter("@oid", operatorID),
+                                    new SqlParameter("@pid", prescriptionID));
+
+                                requiredQty -= take;
+                            }
+                            if (requiredQty > 0) throw new Exception("库存不足！");
+
+                            // 4. 更新总库存
+                            SqlHelper.ExecuteNonQuery(trans, "UPDATE T_Medicine SET Stock = Stock - @q WHERE MedicineID = @mid",
+                                new SqlParameter("@q", row["Quantity"]), new SqlParameter("@mid", medId));
                         }
 
-                        // 🌟 两拳全部打完没报错，提交事务！数据永久保存！
+                        // 5. 改处方状态
+                        SqlHelper.ExecuteNonQuery(trans, "UPDATE T_Prescription_Main SET Status = 2 WHERE PrescriptionID = @pid",
+                            new SqlParameter("@pid", prescriptionID));
+
                         trans.Commit();
                         return true;
                     }
-                    catch (Exception ex)
-                    {
-                        // 💥 一旦发生任何异常，瞬间回滚！就当无事发生过！
-                        trans.Rollback();
-                        throw new Exception("收费失败，系统已安全回滚：" + ex.Message);
-                    }
+                    catch { trans.Rollback(); throw; }
                 }
             }
         }
 
+        // 在 DAL/PrescriptionDAL.cs 中修改
+        public DataTable GetPaidList()
+        {
+            string sql = "SELECT * FROM T_Prescription_Main WHERE Status = 1 ORDER BY CreateTime ASC";
 
-
-
-
+            // 对应你的：ExecuteDataTable(string sql, params SqlParameter[] parameters)
+            // 既然没有参数，第二个参数传 null 即可
+            return SqlHelper.ExecuteDataTable(sql, null);
+        }
 
     }
 }
